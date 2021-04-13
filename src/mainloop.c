@@ -73,8 +73,16 @@ static int sock_set_non_blocking(int fd)
 #define PORT 8081
 #define WEBROOT "./www"
 
-int main()
+int main(int argc, char *argv[])
 {
+    /* ./sehttpd WEBROOT PORT */
+    char *webroot = WEBROOT;
+    int port = PORT;
+    if (argc >= 2)
+        webroot = argv[1];
+    if (argc >= 3)
+        port = atoi(argv[2]);
+
     /* when a fd is closed by remote, writing to this fd will cause system
      * send SIGPIPE to this process, which exit the program
      */
@@ -85,7 +93,7 @@ int main()
         return 0;
     }
 
-    int listenfd = open_listenfd(PORT);
+    int listenfd = open_listenfd(port);
     int rc UNUSED = sock_set_non_blocking(listenfd);
     assert(rc == 0 && "sock_set_non_blocking");
 
@@ -97,7 +105,7 @@ int main()
     assert(events && "epoll_event: malloc");
 
     http_request_t *request = malloc(sizeof(http_request_t));
-    init_http_request(request, listenfd, epfd, WEBROOT);
+    init_http_request(request, listenfd, epfd, webroot);
 
     struct epoll_event event = {
         .data.ptr = request,
@@ -144,7 +152,7 @@ int main()
                         break;
                     }
 
-                    init_http_request(request, infd, epfd, WEBROOT);
+                    init_http_request(request, infd, epfd, webroot);
                     event.data.ptr = request;
                     event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                     epoll_ctl(epfd, EPOLL_CTL_ADD, infd, &event);
