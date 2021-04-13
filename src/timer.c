@@ -1,4 +1,5 @@
 #include <assert.h>
+#include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
@@ -9,65 +10,65 @@
 #define TIMER_INFINITE (-1)
 #define PQ_DEFAULT_SIZE 10
 
-typedef int (*prio_queue_comparator)(void *pi, void *pj);
+typedef bool (*prio_queue_comparator)(void *pi, void *pj);
 
 /* priority queue with binary heap */
 typedef struct {
     void **priv;
-    size_t nalloc;
     size_t size;
+    size_t capacity;
     prio_queue_comparator comp;
 } prio_queue_t;
 
 static bool prio_queue_init(prio_queue_t *ptr,
                             prio_queue_comparator comp,
-                            size_t size)
+                            size_t capacity)
 {
-    ptr->priv = malloc(sizeof(void *) * (size + 1));
+    ptr->priv = malloc(sizeof(void *) * capacity);
     if (!ptr->priv) {
         log_err("prio_queue_init: malloc failed");
         return false;
     }
 
-    ptr->nalloc = 0;
-    ptr->size = size + 1;
+    ptr->size = 0;
+    ptr->capacity = capacity;
     ptr->comp = comp;
     return true;
 }
 
 static inline bool prio_queue_is_empty(prio_queue_t *ptr)
 {
-    return ptr->nalloc == 0;
+    return ptr->size == 0;
 }
 
 static inline size_t prio_queue_size(prio_queue_t *ptr)
 {
-    return ptr->nalloc;
+    return ptr->size;
 }
 
 static inline void *prio_queue_min(prio_queue_t *ptr)
 {
-    return prio_queue_is_empty(ptr) ? NULL : ptr->priv[1];
+    return prio_queue_is_empty(ptr) ? NULL : ptr->priv[0];
 }
 
-static bool resize(prio_queue_t *ptr, size_t new_size)
+static bool resize(prio_queue_t *ptr, size_t new_capacity)
 {
-    if (new_size <= ptr->nalloc) {
-        log_err("resize: new_size to small");
+    if (new_capacity < ptr->size) {
+        log_err("resize: new_capacity to small");
         return false;
     }
 
     /* TODO: use memory pool to avoid unexpected fragmentation */
-    void **new_ptr = malloc(sizeof(void *) * new_size);
+    void **new_ptr = malloc(sizeof(void *) * new_capacity);
     if (!new_ptr) {
         log_err("resize: malloc failed");
         return false;
     }
 
-    memcpy(new_ptr, ptr->priv, sizeof(void *) * (ptr->nalloc + 1));
+    memcpy(new_ptr, ptr->priv, sizeof(void *) * ptr->size);
     free(ptr->priv);
     ptr->priv = new_ptr;
-    ptr->size = new_size;
+    ptr->capacity = new_capacity;
     return true;
 }
 
@@ -80,20 +81,18 @@ static inline void swap(prio_queue_t *ptr, size_t i, size_t j)
 
 static inline void swim(prio_queue_t *ptr, size_t k)
 {
-    while (k > 1 && ptr->comp(ptr->priv[k], ptr->priv[k / 2])) {
-        swap(ptr, k, k / 2);
-        k /= 2;
+    while (k > 0 && ptr->comp(ptr->priv[k], ptr->priv[(k - 1) >> 1])) {
+        swap(ptr, k, (k - 1) >> 1);
+        k = (k - 1) >> 1;
     }
 }
 
-static size_t sink(prio_queue_t *ptr, size_t k)
+static inline size_t sink(prio_queue_t *ptr, size_t k)
 {
-    size_t nalloc = ptr->nalloc;
-
-    while (2 * k <= nalloc) {
-        size_t j = 2 * k;
-        if (j < nalloc && ptr->comp(ptr->priv[j + 1], ptr->priv[j]))
-            j++;
+    while ((k << 1) + 1 < ptr->size) {
+        size_t j = (k << 1) + 1;
+        if (j + 1 < ptr->size && ptr->comp(ptr->priv[j + 1], ptr->priv[j]))
+            ++j;
         if (!ptr->comp(ptr->priv[j], ptr->priv[k]))
             break;
         swap(ptr, j, k);
@@ -109,11 +108,11 @@ static bool prio_queue_delmin(prio_queue_t *ptr)
     if (prio_queue_is_empty(ptr))
         return true;
 
-    swap(ptr, 1, ptr->nalloc);
-    ptr->nalloc--;
-    sink(ptr, 1);
-    if (ptr->nalloc > 0 && ptr->nalloc <= (ptr->size - 1) / 4) {
-        if (!resize(ptr, ptr->size / 2))
+    swap(ptr, 0, ptr->size);
+    --ptr->size;
+    sink(ptr, 0);
+    if (ptr->size > 0 && ptr->size <= ptr->capacity / 4) {
+        if (!resize(ptr, ptr->capacity / 2))
             return false;
     }
     return true;
@@ -122,19 +121,20 @@ static bool prio_queue_delmin(prio_queue_t *ptr)
 /* add a new item to the heap */
 static bool prio_queue_insert(prio_queue_t *ptr, void *item)
 {
-    if (ptr->nalloc + 1 == ptr->size) {
-        if (!resize(ptr, ptr->size * 2))
+    if (ptr->size == ptr->capacity) {
+        if (!resize(ptr, ptr->capacity * 2))
             return false;
     }
 
-    ptr->priv[++ptr->nalloc] = item;
-    swim(ptr, ptr->nalloc);
+    ptr->priv[ptr->size] = item;
+    swim(ptr, ptr->size);
+    ++ptr->size;
     return true;
 }
 
-static int timer_comp(void *ti, void *tj)
+static bool timer_comp(void *ti, void *tj)
 {
-    return ((timer_node *) ti)->key < ((timer_node *) tj)->key ? 1 : 0;
+    return ((timer_node *) ti)->key < ((timer_node *) tj)->key;
 }
 
 static prio_queue_t timer;
@@ -153,7 +153,7 @@ int timer_init()
     bool ret UNUSED = prio_queue_init(&timer, timer_comp, PQ_DEFAULT_SIZE);
     assert(ret && "prio_queue_init error");
 
-    time_update();
+    // time_update();
     return 0;
 }
 
@@ -227,7 +227,7 @@ void add_timer(http_request_t *req, size_t timeout, timer_callback cb)
 
 void del_timer(http_request_t *req)
 {
-    time_update();
+    // time_update();
     timer_node *node = req->timer;
     assert(node && "del_timer: req->timer is NULL");
 
