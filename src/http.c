@@ -222,7 +222,7 @@ void do_request(void *ptr)
     char filename[SHORTLINE];
     webroot = r->root;
 
-    del_timer(r);
+    // del_timer(r);
     for (;;) {
         char *plast = &r->buf[r->last % MAX_BUF];
         size_t remain_size =
@@ -311,7 +311,7 @@ void do_request(void *ptr)
     };
     epoll_ctl(r->epfd, EPOLL_CTL_MOD, r->fd, &event);
 
-    add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
+    // add_timer(r, TIMEOUT_DEFAULT, http_close_conn);
     return;
 
 err:
