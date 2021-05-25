@@ -108,7 +108,7 @@ static bool prio_queue_delmin(prio_queue_t *ptr)
     if (prio_queue_is_empty(ptr))
         return true;
 
-    swap(ptr, 0, ptr->size);
+    swap(ptr, 0, ptr->size - 1);
     --ptr->size;
     sink(ptr, 0);
     if (ptr->size > 0 && ptr->size <= ptr->capacity / 4) {
