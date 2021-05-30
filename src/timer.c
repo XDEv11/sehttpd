@@ -30,6 +30,11 @@ int find_timer()
     return timeouts_timeout(timer);
 }
 
+void time_elapse(int elapsed)
+{
+    timeouts_step(timer, elapsed);
+}
+
 void handle_expired_timers()
 {
     for (struct timeout *to; (to = timeouts_get(timer));) {

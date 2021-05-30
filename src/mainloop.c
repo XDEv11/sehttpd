@@ -113,16 +113,17 @@ int main(int argc, char *argv[])
     };
     epoll_ctl(epfd, EPOLL_CTL_ADD, listenfd, &event);
 
-    // timer_init();
+    timer_init();
 
     printf("Web server started.\n");
 
     /* epoll_wait loop */
     while (1) {
-        // int time = find_timer();
+        int time = find_timer();
         debug("wait time = %d", time);
-        int n = epoll_wait(epfd, events, MAXEVENTS, -1);
-        // handle_expired_timers();
+        int n = epoll_wait(epfd, events, MAXEVENTS, time);
+        time_elapse(time);
+        handle_expired_timers();
 
         for (int i = 0; i < n; i++) {
             http_request_t *r = events[i].data.ptr;
@@ -157,7 +158,7 @@ int main(int argc, char *argv[])
                     event.events = EPOLLIN | EPOLLET | EPOLLONESHOT;
                     epoll_ctl(epfd, EPOLL_CTL_ADD, infd, &event);
 
-                    // add_timer(request, TIMEOUT_DEFAULT, http_close_conn);
+                    add_timer(request, TIMEOUT_DEFAULT, http_close_conn);
                 }
             } else {
                 if ((events[i].events & EPOLLERR) ||
