@@ -27,8 +27,12 @@ OBJS = \
     src/http_parser.o \
     src/http_request.o \
     src/timer.o \
-    src/mainloop.o
+    src/mainloop.o \
+    src/timeout/out/timeout.o
 deps += $(OBJS:%.o=%.o.d)
+
+src/timeout/out/timeout.o:
+	make -C src/timeout
 
 $(TARGET): $(OBJS)
 	$(VECHO) "  LD\t$@\n"
@@ -40,5 +44,6 @@ check: all
 clean:
 	$(VECHO) "  Cleaning...\n"
 	$(Q)$(RM) $(TARGET) $(OBJS) $(deps)
+	$(Q)make -C src/timeout $@
 
 -include $(deps)
