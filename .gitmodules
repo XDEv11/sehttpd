@@ -1,3 +1,3 @@
 [submodule "src/timeout"]
 	path = src/timeout
-	url = git@github.com:sysprog21/timeout.git
+	url = git@github.com:D4nnyLee/timeout.git
